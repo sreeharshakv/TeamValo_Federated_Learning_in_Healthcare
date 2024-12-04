@@ -19,6 +19,8 @@ webhook_url = os.environ.get("WEBHOOK_URL")
 category = os.environ.get("CATEGORY")
 description = os.environ.get("DESCRIPTION")
 global_schema = None  # To be received from the server
+round_counter = 0
+max_rounds = 5  # Should match the server's max_rounds
 
 
 def initialize_local_model(input_shape):
@@ -160,7 +162,9 @@ def train_local_model(x_train, y_train, x_test, y_test):
     """
     Train the local model on the hospital's training data and evaluate it on the test data.
     """
-    print("Training local model...")
+    global round_counter
+    round_counter += 1
+    print(f"Training round {round_counter}/{max_rounds} on node {node_id}...")
 
     # Train the model and capture metrics
     history = local_model.fit(
@@ -172,13 +176,15 @@ def train_local_model(x_train, y_train, x_test, y_test):
         verbose=1
     )
 
-    # Print final training metrics
+    # Evaluate and print metrics
     final_train_loss, final_train_accuracy = local_model.evaluate(x_train, y_train, verbose=0)
-    print(f"Final Training Metrics: Loss = {final_train_loss:.4f}, Accuracy = {final_train_accuracy:.4f}")
-
-    # Print final test metrics
     final_test_loss, final_test_accuracy = local_model.evaluate(x_test, y_test, verbose=0)
-    print(f"Final Test Metrics: Loss = {final_test_loss:.4f}, Accuracy = {final_test_accuracy:.4f}")
+    print(
+        f"Round {round_counter} - Final Training Metrics: Loss = {final_train_loss:.4f}, Accuracy = {final_train_accuracy:.4f}")
+    print(
+        f"Round {round_counter} - Final Test Metrics: Loss = {final_test_loss:.4f}, Accuracy = {final_test_accuracy:.4f}")
+
+    # Optionally log or save the metrics for later analysis
 
     # Submit updated weights to the global server
     submit_local_weights()
@@ -214,8 +220,15 @@ def notify_weights():
     """
     Endpoint to receive notification about new global weights.
     """
+    global round_counter
     data = request.json
     global_weights = data['global_weights']
+
+    if round_counter >= max_rounds:
+        print(f"Maximum number of rounds reached on node {node_id}. Stopping training.")
+        return jsonify({"message": "Training complete"}), 200
+
+    print(f"Node {node_id} received global weights for round {round_counter + 1}.")
 
     # Update local model with new global weights
     local_model.set_weights([tf.convert_to_tensor(w) for w in global_weights])
@@ -226,6 +239,16 @@ def notify_weights():
     train_local_model(x_train, y_train, x_test, y_test)
 
     return jsonify({"message": "Local model updated and training triggered"}), 200
+
+
+@app.route('/training_complete', methods=['POST'])
+def training_complete():
+    """
+    Endpoint to handle training completion notification from the server.
+    """
+    print(f"Node {node_id} received training completion notification from server.")
+    # You can perform any cleanup or final evaluation here
+    return jsonify({"message": "Node acknowledged training completion"}), 200
 
 
 if __name__ == "__main__":

@@ -11,6 +11,8 @@ received_weights = {}
 registered_nodes = {}
 node_schemas = {}
 global_schema = None
+current_round = 0
+max_rounds = 5  # Set the maximum number of rounds
 
 
 @app.route('/health', methods=['GET'])
@@ -101,7 +103,7 @@ def submit_weights():
     """
     Endpoint for hospital nodes to submit updated weights.
     """
-    global received_weights
+    global received_weights, current_round
     data = request.json
     node_id = data['node_id']
     weights = data['weights']
@@ -111,7 +113,15 @@ def submit_weights():
 
     # Check if all registered nodes have submitted weights
     if len(received_weights) == len(registered_nodes):
-        print("All nodes have submitted weights. Aggregating...")
+        current_round += 1
+        print(f"All nodes have submitted weights for round {current_round}.")
+        if current_round > max_rounds:
+            print("Maximum number of rounds reached. Stopping aggregation.")
+            # Optionally notify nodes that training is complete
+            notify_training_complete()
+            return jsonify({"message": "Training complete"}), 200
+
+        print("Aggregating weights...")
         aggregated_weights = aggregate_weights(list(received_weights.values()))
         received_weights = {}  # Clear buffer
 
@@ -134,6 +144,29 @@ def notify_hospital_nodes(aggregated_weights):
             )
             if response.status_code == 200:
                 print(f"Successfully notified {node_id}.")
+            else:
+                print(f"Failed to notify {node_id}: {response.status_code} {response.text}")
+        except Exception as e:
+            print(f"Error notifying {node_id}: {e}")
+
+    with ThreadPoolExecutor() as executor:
+        for node_id, webhook_url in registered_nodes.items():
+            executor.submit(notify_node, node_id, webhook_url)
+
+
+def notify_training_complete():
+    """
+    Notify hospital nodes that training is complete.
+    """
+
+    def notify_node(node_id, url):
+        try:
+            response = requests.post(
+                f'{url}/training_complete',
+                json={"message": "Training complete"}
+            )
+            if response.status_code == 200:
+                print(f"Successfully notified {node_id} of training completion.")
             else:
                 print(f"Failed to notify {node_id}: {response.status_code} {response.text}")
         except Exception as e:
