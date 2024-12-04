@@ -24,7 +24,7 @@ services:
     environment:
       - NODE_ID=hospital_node_h1
       - GLOBAL_SERVER_URL=http://global_server:5003
-      - WEBHOOK_URL=http://hospital_node_h1:5003/notify_weights
+      - WEBHOOK_URL=http://hospital_node_h1:5003
       - CATEGORY=age > 70
       - DESCRIPTION=Geriatric Hospital
     depends_on:
@@ -39,7 +39,7 @@ services:
     environment:
       - NODE_ID=hospital_node_h2
       - GLOBAL_SERVER_URL=http://global_server:5003
-      - WEBHOOK_URL=http://hospital_node_h2:5003/notify_weights
+      - WEBHOOK_URL=http://hospital_node_h2:5003
       - CATEGORY=age <= 30
       - DESCRIPTION=Pediatrics Hospital
     depends_on:
@@ -54,7 +54,7 @@ services:
     environment:
       - NODE_ID=hospital_node_h3
       - GLOBAL_SERVER_URL=http://global_server:5003
-      - WEBHOOK_URL=http://hospital_node_h3:5003/notify_weights
+      - WEBHOOK_URL=http://hospital_node_h3:5003
       - CATEGORY=gender == 'Female'
       - DESCRIPTION=Women's Health Hospital
     depends_on:
@@ -69,7 +69,7 @@ services:
     environment:
       - NODE_ID=hospital_node_h4
       - GLOBAL_SERVER_URL=http://global_server:5003
-      - WEBHOOK_URL=http://hospital_node_h4:5003/notify_weights
+      - WEBHOOK_URL=http://hospital_node_h4:5003
       - CATEGORY=num_medications > 10
       - DESCRIPTION=Specialized Care Hospital
     depends_on:
@@ -84,7 +84,7 @@ services:
     environment:
       - NODE_ID=hospital_node_h5
       - GLOBAL_SERVER_URL=http://global_server:5003
-      - WEBHOOK_URL=http://hospital_node_h5:5003/notify_weights
+      - WEBHOOK_URL=http://hospital_node_h5:5003
       - CATEGORY=readmitted == '>30'
       - DESCRIPTION=Long-Term Care Hospital
     depends_on:

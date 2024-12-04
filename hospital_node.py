@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from data_helper import get_test_data
 import time
+import threading
 
 app = Flask(__name__)
 
@@ -17,6 +18,7 @@ node_id = os.environ.get("NODE_ID")
 webhook_url = os.environ.get("WEBHOOK_URL")
 category = os.environ.get("CATEGORY")
 description = os.environ.get("DESCRIPTION")
+global_schema = None  # To be received from the server
 
 
 def initialize_local_model(input_shape):
@@ -48,10 +50,22 @@ def register_node():
                 print(f"Attempt {attempt}: Failed to register node: {response.text}")
         except Exception as e:
             print(f"Attempt {attempt}: Error registering node: {e}")
-        if attempt < max_retries:
-            print(f"Retrying in {wait_seconds} seconds...")
-            time.sleep(wait_seconds)
+            if attempt < max_retries:
+                print(f"Retrying in {wait_seconds} seconds...")
+                time.sleep(wait_seconds)
     print("Failed to register node after multiple attempts.")
+
+
+def send_local_schema(schema):
+    payload = {"node_id": node_id, "schema": schema}
+    try:
+        response = requests.post(f"{global_server_url}/submit_schema", json=payload)
+        if response.status_code == 200:
+            print("Local schema submitted to global server.")
+        else:
+            print(f"Failed to submit schema: {response.text}")
+    except Exception as e:
+        print(f"Error submitting schema: {e}")
 
 
 def fetch_and_prepare_data():
@@ -81,17 +95,39 @@ def fetch_and_prepare_data():
     categorical_cols = data.select_dtypes(include=['object']).columns.tolist()
     print(f"Categorical columns before encoding: {categorical_cols}")
 
-    # Encode categorical variables
-    if categorical_cols:
-        data = pd.get_dummies(data, columns=categorical_cols, drop_first=True)
+    if global_schema is None:
+        # Extract local schema
+        local_schema = {}
+        for col in categorical_cols:
+            local_categories = data[col].astype(str).unique().tolist()
+            local_schema[col] = local_categories
+        # Send local schema to global server
+        send_local_schema(local_schema)
+        # Wait for global schema
+        print("Waiting for global schema from server...")
+        while global_schema is None:
+            time.sleep(1)
+        print("Global schema received.")
 
-    # Verify no object columns remain
-    non_numeric_cols = data.select_dtypes(include=['object']).columns.tolist()
-    if non_numeric_cols:
-        print(f"Non-numeric columns after encoding: {non_numeric_cols}")
-        raise ValueError("There are still non-numeric columns after encoding.")
+    # Encode categorical variables using global schema
+    for col in categorical_cols:
+        data[col] = data[col].astype(str)
+        data[col] = pd.Categorical(data[col], categories=global_schema[col])
+    data = pd.get_dummies(data, columns=categorical_cols, drop_first=False)
 
-    # Ensure all data is numeric
+    # Reindex to ensure all expected columns are present
+    expected_columns = []
+    for col in global_schema.keys():
+        categories = global_schema[col]
+        expected_columns.extend([f"{col}_{category}" for category in categories])
+    # Add other non-categorical columns
+    non_categorical_cols = [col for col in data.columns if col not in expected_columns and col != 'target']
+    expected_columns.extend(non_categorical_cols)
+
+    # Reindex the DataFrame to ensure consistent column order and fill missing columns with zeros
+    data = data.reindex(columns=expected_columns + ['target'], fill_value=0)
+
+    # Verify that all data is numeric
     if not all([np.issubdtype(dtype, np.number) for dtype in data.dtypes]):
         print("Not all data columns are numeric after encoding.")
         print(data.dtypes)
@@ -164,6 +200,15 @@ def submit_local_weights():
         print(f"Error submitting weights: {e}")
 
 
+@app.route('/receive_global_schema', methods=['POST'])
+def receive_global_schema():
+    global global_schema
+    data = request.json
+    global_schema = data['global_schema']
+    print("Global schema received from server.")
+    return jsonify({"message": "Global schema received"}), 200
+
+
 @app.route('/notify_weights', methods=['POST'])
 def notify_weights():
     """
@@ -187,6 +232,9 @@ if __name__ == "__main__":
     print(f"Starting hospital node {node_id}...")
     register_node()
 
+    # Start Flask app in a separate thread to handle incoming schema and weight updates
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5003, debug=False, use_reloader=False)).start()
+
     # Initial training upon startup
     try:
         x_train, x_test, y_train, y_test = fetch_and_prepare_data()
@@ -195,5 +243,3 @@ if __name__ == "__main__":
         train_local_model(x_train, y_train, x_test, y_test)
     except Exception as e:
         print(f"Error during initial training: {e}")
-
-    app.run(host="0.0.0.0", port=5003, debug=False)
