@@ -1,0 +1,92 @@
+services:
+  global_server:
+    build:
+      context: .
+      dockerfile: Dockerfile.global
+    container_name: global_server
+    ports:
+      - "5003:5003"
+    volumes:
+      - ./global_server.py:/app/global_server.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5003/health" ]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  hospital_node_h1:
+    build:
+      context: .
+      dockerfile: Dockerfile.hospital
+    container_name: hospital_node_h1
+    environment:
+      - NODE_ID=hospital_node_h1
+      - GLOBAL_SERVER_URL=http://global_server:5003
+      - WEBHOOK_URL=http://hospital_node_h1:5003/notify_weights
+      - CATEGORY=age > 70
+      - DESCRIPTION=Geriatric Hospital
+    depends_on:
+      global_server:
+        condition: service_healthy
+
+  hospital_node_h2:
+    build:
+      context: .
+      dockerfile: Dockerfile.hospital
+    container_name: hospital_node_h2
+    environment:
+      - NODE_ID=hospital_node_h2
+      - GLOBAL_SERVER_URL=http://global_server:5003
+      - WEBHOOK_URL=http://hospital_node_h2:5003/notify_weights
+      - CATEGORY=age <= 30
+      - DESCRIPTION=Pediatrics Hospital
+    depends_on:
+      global_server:
+        condition: service_healthy
+
+  hospital_node_h3:
+    build:
+      context: .
+      dockerfile: Dockerfile.hospital
+    container_name: hospital_node_h3
+    environment:
+      - NODE_ID=hospital_node_h3
+      - GLOBAL_SERVER_URL=http://global_server:5003
+      - WEBHOOK_URL=http://hospital_node_h3:5003/notify_weights
+      - CATEGORY=gender == 'Female'
+      - DESCRIPTION=Women's Health Hospital
+    depends_on:
+      global_server:
+        condition: service_healthy
+
+  hospital_node_h4:
+    build:
+      context: .
+      dockerfile: Dockerfile.hospital
+    container_name: hospital_node_h4
+    environment:
+      - NODE_ID=hospital_node_h4
+      - GLOBAL_SERVER_URL=http://global_server:5003
+      - WEBHOOK_URL=http://hospital_node_h4:5003/notify_weights
+      - CATEGORY=num_medications > 10
+      - DESCRIPTION=Specialized Care Hospital
+    depends_on:
+      global_server:
+        condition: service_healthy
+
+  hospital_node_h5:
+    build:
+      context: .
+      dockerfile: Dockerfile.hospital
+    container_name: hospital_node_h5
+    environment:
+      - NODE_ID=hospital_node_h5
+      - GLOBAL_SERVER_URL=http://global_server:5003
+      - WEBHOOK_URL=http://hospital_node_h5:5003/notify_weights
+      - CATEGORY=readmitted == '>30'
+      - DESCRIPTION=Long-Term Care Hospital
+    depends_on:
+      global_server:
+        condition: service_healthy
