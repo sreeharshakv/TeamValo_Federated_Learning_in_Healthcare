@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import numpy as np
 import requests
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -13,11 +14,19 @@ node_schemas = {}
 global_schema = None
 current_round = 0
 max_rounds = 5  # Set the maximum number of rounds
+registered_nodes_info = {}  # Key: node_id, Value: {'webhook_url': ..., 'last_updated': ..., 'metrics': [...], 'logs': [...]}
 
 
 @app.route('/health', methods=['GET'])
 def health():
     return 'OK', 200
+
+
+def safe_format(value, decimal_places=4):
+    try:
+        return f"{float(value):.{decimal_places}f}"
+    except (TypeError, ValueError):
+        return "N/A"
 
 
 @app.route('/register_node', methods=['POST'])
@@ -33,6 +42,12 @@ def register_node():
         return jsonify({"message": "node_id and webhook_url are required"}), 400
 
     registered_nodes[node_id] = webhook_url
+    registered_nodes_info[node_id] = {
+        'webhook_url': webhook_url,
+        'last_updated': None,
+        'metrics': [],
+        'logs': []
+    }
     print(f"Node {node_id} registered with webhook URL {webhook_url}")
     return jsonify({"message": f"Node {node_id} registered successfully"}), 200
 
@@ -177,5 +192,59 @@ def notify_training_complete():
             executor.submit(notify_node, node_id, webhook_url)
 
 
+@app.route('/dashboard')
+def dashboard():
+    return render_template('dashboard.html', nodes=registered_nodes_info)
+
+
+@app.route('/submit_metrics', methods=['POST'])
+def submit_metrics():
+    data = request.json
+    node_id = data['node_id']
+    metrics = data['metrics']
+    metrics['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    node_info = registered_nodes_info.get(node_id)
+    if node_info:
+        node_info['metrics'].append(metrics)
+        node_info['last_updated'] = metrics['timestamp']
+        print(f"Received metrics from {node_id} for round {metrics['round']}.")
+        return jsonify({"message": "Metrics received"}), 200
+    else:
+        return jsonify({"message": "Node not registered"}), 400
+
+
+@app.route('/node/<node_id>')
+def node_details(node_id):
+    node_info = registered_nodes_info.get(node_id)
+    if not node_info:
+        return "Node not found", 404
+
+    metrics = node_info.get('metrics', [])
+    logs = node_info.get('logs', [])
+    last_updated = node_info.get('last_updated')
+
+    return render_template('node_details.html',
+                           node_id=node_id,
+                           metrics=metrics,
+                           logs=logs,
+                           last_updated=last_updated)
+
+
+@app.route('/submit_logs', methods=['POST'])
+def submit_logs():
+    data = request.json
+    node_id = data['node_id']
+    log_line = data['log']
+
+    node_info = registered_nodes_info.get(node_id)
+    if node_info:
+        node_info['logs'].append(log_line)
+        return jsonify({"message": "Log received"}), 200
+    else:
+        return jsonify({"message": "Node not registered"}), 400
+
+
 if __name__ == "__main__":
+    app.jinja_env.filters['safe_format'] = safe_format
     app.run(host="0.0.0.0", port=5003, debug=False)

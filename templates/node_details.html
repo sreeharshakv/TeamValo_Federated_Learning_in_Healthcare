@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Node {{ node_id }} Details</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Node {{ node_id }} Details</h1>
+    <p><strong>Last Updated:</strong> {{ last_updated }}</p>
+
+    <!-- Metrics Chart Section -->
+    <h2>Metrics Over Rounds (Visualization)</h2>
+    <div id="accuracy_chart"></div>
+    <div id="precision_chart"></div>
+    <div id="recall_chart"></div>
+    <div id="f1_chart"></div>
+    <div id="auc_chart"></div>
+
+    <!-- Metrics Table Section -->
+    <h2>Metrics Table</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Round</th>
+                <th>Test Accuracy</th>
+                <th>Test Precision</th>
+                <th>Test Recall</th>
+                <th>Test F1-Score</th>
+                <th>Test AUC-ROC</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in metrics %}
+            <tr>
+                <td>{{ m.round }}</td>
+                <td>{{ m.test_accuracy|safe_format }}</td>
+                <td>{{ m.test_precision|safe_format }}</td>
+                <td>{{ m.test_recall|safe_format }}</td>
+                <td>{{ m.test_f1|safe_format }}</td>
+                <td>{{ m.test_auc|safe_format }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Logs Section -->
+    <h2>Logs</h2>
+    <pre>{{ logs|join('\n') }}</pre>
+
+    <!-- Plotly Charts Script -->
+    <script>
+        const metricsData = {{ metrics|tojson }};
+
+        function createChart(containerId, metricName, yLabel) {
+            const rounds = metricsData.map(m => m.round);
+            const values = metricsData.map(m => m[metricName] || 0);
+
+            const trace = {
+                x: rounds,
+                y: values,
+                mode: 'lines+markers',
+                name: metricName
+            };
+
+            const layout = {
+                title: yLabel + ' Over Rounds',
+                xaxis: { title: 'Round' },
+                yaxis: { title: yLabel },
+                margin: { t: 30 }
+            };
+
+            Plotly.newPlot(containerId, [trace], layout);
+        }
+
+        // Create charts for each metric
+        createChart('accuracy_chart', 'test_accuracy', 'Test Accuracy');
+        createChart('precision_chart', 'test_precision', 'Test Precision');
+        createChart('recall_chart', 'test_recall', 'Test Recall');
+        createChart('f1_chart', 'test_f1', 'Test F1-Score');
+        createChart('auc_chart', 'test_auc', 'Test AUC-ROC');
+    </script>
+</body>
+</html>

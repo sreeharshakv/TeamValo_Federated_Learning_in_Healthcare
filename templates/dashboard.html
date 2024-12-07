@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Improving Federated Learning in Healthcare</title>
+</head>
+<body>
+    <h1>Improving Federated Learning in Healthcare</h1>
+    <h2>Currently Registered Nodes</h2>
+    <ul>
+        {% for node_id in nodes %}
+            <li><a href="{{ url_for('node_details', node_id=node_id) }}">{{ node_id }}</a></li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

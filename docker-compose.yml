@@ -8,6 +8,8 @@ services:
       - "5003:5003"
     volumes:
       - ./global_server.py:/app/global_server.py
+      - ./templates:/app/templates
+      - ./static:/app/static
     environment:
       - PYTHONUNBUFFERED=1
     healthcheck:
